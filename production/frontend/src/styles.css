@@ -327,8 +327,7 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 
 /* ── login ───────────────────────────────────────────────────────────── */
 .login-page { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; background: var(--bg); }
-.login-hero { position: relative; background: linear-gradient(150deg, #1d130f 0%, #2a1610 55%, #3a1b10 100%); color: #fff; padding: 56px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
-.login-hero::after { content: ''; position: absolute; left: -120px; bottom: -120px; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(circle, rgba(250,84,28,0.5), transparent 65%); }
+.login-hero { position: relative; background: #fff; color: #1a1411; padding: 56px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
 /* Wave field behind the hero (copied from OH_Assessments' landing). :not(.waves) keeps the field absolute. */
 .waves { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
 .waves svg { display: block; }
@@ -337,9 +336,9 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 .login-hero .lh-brand { display: flex; align-items: center; gap: 12px; }
 /* Dark-ink lockup on a dark hero — brightness(0) crushes it to black, invert
    lifts it to solid white, alpha untouched (the PNG is RGBA). */
-.login-hero .lh-brand img { width: 190px; height: auto; filter: brightness(0) invert(1); }
+.login-hero .lh-brand img { width: 190px; height: auto; }
 .login-hero h2 { font-size: 40px; line-height: 1.1; max-width: 9em; }
-.login-hero .lh-sub { color: rgba(255,255,255,0.7); max-width: 26em; line-height: 1.6; font-size: 15px; }
+.login-hero .lh-sub { color: #6b625c; max-width: 26em; line-height: 1.6; font-size: 15px; }
 .login-panel { display: grid; place-items: center; padding: 40px; }
 .login-card { width: 100%; max-width: 360px; }
 .login-card h1 { font-size: 26px; margin-bottom: 6px; }
