@@ -13,10 +13,11 @@ if _PARENT not in sys.path:
 
 from backend.app import app  # noqa: E402
 
-# The 5-minute sync runs in-process as a daemon thread (one per gunicorn worker); a Postgres
-# advisory lock elects a single syncer. Started here (not in create_app) so it only runs under
-# gunicorn — never during tests/CLI that import the app. SYNC_ENABLED=0 turns it off.
-from backend.services.sync import start_background_sync  # noqa: E402
-start_background_sync()
+# The 5-minute sync runs in-process as a daemon thread, one per gunicorn worker (a Postgres advisory lock elects a
+# single syncer). It is started by gunicorn.conf.py post_fork, NOT here: Render runs gunicorn with --preload, so this
+# module is imported in the master, and a thread started here would be alive at fork and deadlock the workers.
+# Missing integrations still fail the deploy here. SYNC_ENABLED=0 turns the sync off.
+from backend.services.sync import check_sync_config  # noqa: E402
+check_sync_config()
 
 __all__ = ["app"]

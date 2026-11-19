@@ -7,6 +7,14 @@ os.environ["JWT_SECRET"] = "test-secret"
 os.environ["FRONTEND_ORIGIN"] = "http://localhost:5173"
 os.environ["BOLNA_API_KEY"] = "test"
 os.environ["GOOGLE_OAUTH_CLIENT_ID"] = ""
+os.environ["ALLOWED_EMAIL_DOMAIN"] = "openhouse.in"
+os.environ["BOLNA_BASE_URL"] = "https://api.bolna.ai"
+os.environ["LOG_LEVEL"] = "INFO"
+# backend/.env holds PRODUCTION settings and config.py loads it: blank every key it has (load_dotenv never overrides
+# a set variable), so a test can never reach real DI, R2, Interakt or Neon. Tests that need one monkeypatch config.
+from dotenv import dotenv_values  # noqa: E402
+for _k in dotenv_values(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")):
+    os.environ.setdefault(_k, "")
 
 import pytest  # noqa: E402
 

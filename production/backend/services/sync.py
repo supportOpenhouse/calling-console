@@ -936,16 +936,25 @@ def _loop():
 _started = False
 
 
-def start_background_sync() -> None:
-    """Start the sync loop as a daemon thread, once per process. Called from wsgi.py. SYNC_ENABLED=0 turns it off.
-    Raises when an integration the sync needs is not configured."""
-    global _started
+def check_sync_config() -> None:
+    """Raises when SYNC_ENABLED=1 and an integration the sync needs is not configured (wsgi.py: fails the deploy)."""
     if config.SYNC_ENABLED != "1":
-        log.info("sync: not started (SYNC_ENABLED=%s)", config.SYNC_ENABLED)
         return
     missing = [k for k in REQUIRED_CONFIG if not getattr(config, k)]
     if missing:
         raise RuntimeError(f"background sync needs {', '.join(missing)} (or set SYNC_ENABLED=0)")
+
+
+def start_background_sync() -> None:
+    """Start the sync loop as a daemon thread, once per process. SYNC_ENABLED=0 turns it off. Raises like
+    check_sync_config. Called from gunicorn.conf.py post_fork, in each worker -- never in the gunicorn master: Render
+    runs gunicorn with --preload, and a thread alive at fork (with its DB sockets and held locks) deadlocks the
+    forked worker."""
+    global _started
+    if config.SYNC_ENABLED != "1":
+        log.info("sync: not started (SYNC_ENABLED=%s)", config.SYNC_ENABLED)
+        return
+    check_sync_config()
     if _started:
         return
     _started = True

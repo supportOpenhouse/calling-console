@@ -1480,6 +1480,41 @@ def test_background_thread_starts_once(monkeypatch):
     assert ran == [1]
 
 
+def test_tests_never_see_production_integrations():
+    """conftest blanks every backend/.env key: a test run once POSTed fake calls to production DI."""
+    for k in ("DI_AI_CALLS_URL", "DI_AI_CALLS_TOKEN", "R2_BLOB_PHONE_CALLS_BUCKET", "R2_ACCESS_KEY_ID",
+              "R2_SECRET_ACCESS_KEY", "R2_PHONE_CALLS_PUBLIC_URL", "INTERAKT_API_KEY", "INGEST_TOKEN"):
+        assert getattr(config, k) == "", k
+    assert "localhost" in config.DATABASE_URL
+
+
+def _load_file(name):
+    import importlib.util
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), name)
+    spec = importlib.util.spec_from_file_location(f"_t_{name.replace('.', '_')}", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_importing_wsgi_never_starts_the_sync_thread(monkeypatch):
+    """--preload imports wsgi.py in the gunicorn master; a thread started there deadlocked a forked worker."""
+    ran = _configure(monkeypatch)
+    _load_file("wsgi.py")
+    _join_sync_threads()
+    assert ran == [] and sync._started is False
+    _configure(monkeypatch, DI_AI_CALLS_TOKEN="")
+    with pytest.raises(RuntimeError, match="DI_AI_CALLS_TOKEN"):  # a missing integration still fails the deploy
+        _load_file("wsgi.py")
+
+
+def test_gunicorn_post_fork_starts_the_sync_thread_in_the_worker(monkeypatch):
+    ran = _configure(monkeypatch)
+    _load_file("gunicorn.conf.py").post_fork(None, None)
+    _join_sync_threads()
+    assert ran == [1]
+
+
 @pytest.mark.parametrize("report, code", [(None, 1), ({"errors": []}, 0), ({"errors": ["batch bb-1: x"]}, 1)])
 def test_run_sync_script(monkeypatch, capsys, report, code):
     seen = []
