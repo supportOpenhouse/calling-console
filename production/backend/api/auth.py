@@ -76,7 +76,9 @@ def require_auth(*roles: str):
 
 
 def _find_or_create(conn, email: str, name: str) -> dict:
-    role = "ADMIN" if email in config.ADMIN_EMAILS else "VIEWER"
+    """An existing user row keeps its role (owners are made in the database or by another owner); a first sign-in
+    becomes VIEWER of both departments."""
+    role = "VIEWER"
     with conn.cursor() as cur:
         cur.execute(
             'INSERT INTO "user" (email, name, role, vertical) VALUES (%s,%s,%s,\'BOTH\') '

@@ -158,7 +158,7 @@ function DatasetDetailFor({ dept, id, manage, admin }) {
               <button key={k} type="button" className={k === f ? 'btn-primary' : 'btn-ghost'} onClick={() => setFilter(k)}>{label}</button>
             ))}
             <form onSubmit={search}>
-              <input type="search" value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="phone / name / society" style={{ width: 200 }} />
+              <input type="search" value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="phone / name / society" />
             </form>
           </div>}>
           <PageState loading={rowsQ.loading} error={rowsQ.error} onRetry={rowsQ.reload} />

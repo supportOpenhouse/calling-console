@@ -108,8 +108,6 @@ def upsert_user():
     email = (body.get("email") or "").strip().lower() if isinstance(body.get("email"), str) else ""
     if not email or not email.endswith("@" + config.ALLOWED_EMAIL_DOMAIN) or email.count("@") != 1:
         raise bad_request(f"email must be an @{config.ALLOWED_EMAIL_DOMAIN} address")
-    if email in config.ADMIN_EMAILS and not rbac.is_owner(g.user):
-        raise forbidden("only the product owner can pre-assign an owner email")
     conn = get_conn()
     try:
         with conn.cursor() as cur:

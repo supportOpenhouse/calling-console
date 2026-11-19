@@ -156,14 +156,13 @@ def test_audit_list(client, conn):
     assert r["total"] == 1 and r["items"][0]["user_email"] == o["email"]
 
 
-def test_head_cannot_preassign_owner_email(client, conn, monkeypatch):
-    from backend import config
-    monkeypatch.setattr(config, "ADMIN_EMAILS", {"boss@openhouse.in"})
+def test_head_cannot_overwrite_an_owner_by_email(client, conn):
+    _hdr(conn, role="ADMIN", vertical="BOTH", email="boss@openhouse.in")
     head, h = _hdr(conn, role="HEAD", vertical="SUPPLY")
     body = {"email": "boss@openhouse.in", "role": "VIEWER", "vertical": "SUPPLY", "use_case_ids": [],
             "title": None, "active": True}
     assert client.post("/api/users", headers=h, json=body).status_code == 403
-    assert _one(conn, 'SELECT count(*) n FROM "user" WHERE email=%s', "boss@openhouse.in")["n"] == 0
+    assert _one(conn, 'SELECT role FROM "user" WHERE email=%s', "boss@openhouse.in")["role"] == "ADMIN"
 
 
 def test_owner_cannot_deactivate_self(client, conn):

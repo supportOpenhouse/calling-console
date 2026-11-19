@@ -369,7 +369,13 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2);
 .stat-row .sr-num { font-weight: 700; font-size: 16px; }
 
 /* ── toolbar (board / table view) ────────────────────────────────────── */
-.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; margin-bottom: 16px; }
+/* Filters sit on one line: the global form rule makes inputs/selects width:100%, which stacked them. They shrink
+   instead of wrapping; the search box takes the rest. Phones wrap. */
+.toolbar > select, .toolbar > input { width: auto; flex: 0 1 150px; min-width: 0; }
+.toolbar > form { flex: 1 1 180px; min-width: 120px; }
+.page-head select, .card-head select { width: auto; }
+@media (max-width: 860px) { .toolbar { flex-wrap: wrap; } }
 /* ── modal ───────────────────────────────────────────────────────────── */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(20,16,14,0.5); backdrop-filter: blur(2px); display: grid; place-items: start center; padding: 48px 16px; z-index: 1000; overflow: auto; animation: modal-scrim-in var(--t-enter) var(--ease-out); }
 .modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-lg); width: 100%; max-width: 480px; padding: 24px; animation: modal-in var(--t-enter) var(--ease-out); }

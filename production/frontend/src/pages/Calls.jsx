@@ -90,7 +90,7 @@ function CallsFor({ dept }) {
         <input type="date" value={f.from} onChange={(e) => setFilter('from', e.target.value)} aria-label="From date" />
         <input type="date" value={f.to} onChange={(e) => setFilter('to', e.target.value)} aria-label="To date" />
         <form onSubmit={(e) => { e.preventDefault(); setFilter('q', qInput.trim()); }}>
-          <input type="search" value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="phone / name / words" style={{ width: 200 }} />
+          <input type="search" value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="phone / name / words" />
         </form>
       </div>
       <Card>

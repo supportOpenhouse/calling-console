@@ -103,7 +103,7 @@ Inbound to Render: Google ID-token sign-in · lead ingest from the OH-Supply_met
     render.yaml  runtime.txt  .python-version  requirements.txt  .env.example  .gitignore  README.md
   ```
 - **`config.py`:** DI's style. Module-level constants read from the environment, and `backend/.env` loaded through python-dotenv. Variables:
-  - `DATABASE_URL`, `JWT_SECRET` (required, no default), `GOOGLE_OAUTH_CLIENT_ID`, `ALLOWED_EMAIL_DOMAIN` (default `openhouse.in`), `ADMIN_EMAILS`, `FRONTEND_ORIGIN`;
+  - `DATABASE_URL`, `JWT_SECRET` (required, no default), `GOOGLE_OAUTH_CLIENT_ID`, `ALLOWED_EMAIL_DOMAIN` (default `openhouse.in`), `FRONTEND_ORIGIN`;
   - `BOLNA_API_KEY`, `BOLNA_BASE_URL`;
   - `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`;
   - `INGEST_TOKEN`, `DI_AI_CALLS_URL`, `DI_AI_CALLS_TOKEN`;
@@ -125,7 +125,7 @@ Inbound to Render: Google ID-token sign-in · lead ingest from the OH-Supply_met
 - **Sign-in** is DI's `api/auth.py`, copied:
   1. `POST /api/auth/google {id_token}` → verified with `google.oauth2.id_token.verify_oauth2_token` against `GOOGLE_OAUTH_CLIENT_ID`.
   2. The email must be verified and end in `@ALLOWED_EMAIL_DOMAIN`.
-  3. The user is created on first sign-in: `ADMIN_EMAILS` become product owner (ADMIN, department BOTH); everyone else becomes VIEWER with department BOTH.
+  3. The user is created on first sign-in as VIEWER with department BOTH; an existing row keeps its role. Product owners (ADMIN) are set in the database (no env list; changed 2026-11-19).
   4. It returns an HS256 JWT signed with `JWT_SECRET` that lasts 7 days (DI's `JWT_EXPIRY_HOURS`).
 - `GET /api/auth/me` returns the user.
 - `POST /api/auth/dev` (DI's passwordless sign-in for seeded demo accounts) is active only while `GOOGLE_OAUTH_CLIENT_ID` is unset, which means local development only.

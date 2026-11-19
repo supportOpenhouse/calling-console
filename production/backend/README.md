@@ -43,7 +43,6 @@ cp backend/.env.example backend/.env      # then fill it in
 | `GOOGLE_OAUTH_CLIENT_ID` | Google sign-in |
 | `DEV_LOGIN` | `1` enables `POST /api/auth/dev` and only works while `GOOGLE_OAUTH_CLIENT_ID` is empty. Local only; never set it in production |
 | `ALLOWED_EMAIL_DOMAIN` | login domain gate (default `openhouse.in`) |
-| `ADMIN_EMAILS` | comma-separated emails that get the ADMIN role |
 | `FRONTEND_ORIGIN` | CORS allow-origin |
 | `BOLNA_API_KEY`, `BOLNA_BASE_URL` | Bolna; unset key reports `configured: false` |
 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` | recording archive (R2) |
@@ -87,6 +86,10 @@ has errors or another sync holds the lock.
 - **Never use `--preload`** in the gunicorn command: `wsgi.py` starts the sync thread at import, and a thread started
   in the master dies at fork. Every worker runs its own thread; the advisory lock lets one sync at a time.
 - Migrations are run by hand, not on deploy: `DATABASE_URL=<neon> $PY -m backend.scripts.migrate`.
+- Owners (ADMIN) come from the database, not the environment: a first Google sign-in becomes VIEWER. Make the first
+  owner in Neon (before or after their first sign-in), then owners promote others from the Team page:
+  `INSERT INTO "user" (email, name, role, vertical) VALUES ('<email>', '<name>', 'ADMIN', 'BOTH')
+  ON CONFLICT (email) DO UPDATE SET role = 'ADMIN', vertical = 'BOTH';`
 - Run the **backfill before creating any campaign and before the first production dial**, so numbers already marked
   DNC in Bolna history are blocked (and so no backfilled call links to a live campaign and fires its rules).
 - The Neon pooled URL is fine: the sync lock is a transaction-level advisory lock, and the open transaction pins the

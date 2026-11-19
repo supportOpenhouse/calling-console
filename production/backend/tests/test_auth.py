@@ -6,7 +6,6 @@ from backend.tests.factories import make_user
 
 def _google(monkeypatch, info):
     monkeypatch.setattr(config, "GOOGLE_OAUTH_CLIENT_ID", "cid")
-    monkeypatch.setattr(config, "ADMIN_EMAILS", ["boss@openhouse.in"])
     monkeypatch.setattr("backend.api.auth.id_token.verify_oauth2_token", lambda *a, **k: info)
 
 
@@ -15,15 +14,18 @@ def _login(client, monkeypatch, email, **extra):
     return client.post("/api/auth/google", json={"id_token": "x"})
 
 
-def test_google_login_creates_viewer_and_admin(client, conn, monkeypatch):
+def test_google_login_creates_viewer_and_keeps_db_role(client, conn, monkeypatch):
     r = _login(client, monkeypatch, "a@openhouse.in")
     assert r.status_code == 200
     u = r.get_json()["user"]
     assert (u["role"], u["vertical"], u["active"]) == ("VIEWER", "BOTH", True)
     assert set(u) == {"id", "email", "name", "image", "role", "vertical", "use_case_ids", "title", "active"}
     assert client.get("/api/auth/me", headers={"Authorization": "Bearer " + r.get_json()["token"]}).status_code == 200
+    make_user(conn, email="boss@openhouse.in", role="ADMIN", vertical="BOTH")  # owner set in the database
+    conn.commit()
     r = _login(client, monkeypatch, "boss@openhouse.in")
     assert (r.get_json()["user"]["role"], r.get_json()["user"]["vertical"]) == ("ADMIN", "BOTH")
+    assert _login(client, monkeypatch, "new.boss@openhouse.in").get_json()["user"]["role"] == "VIEWER"  # no env list
     assert _login(client, monkeypatch, "x@gmail.com").status_code == 403
     assert _login(client, monkeypatch, "a@openhouse.in").get_json()["user"]["role"] == "VIEWER"
 
