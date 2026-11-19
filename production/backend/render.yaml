@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: calling-console-api
+    env: python
+    region: singapore
+    plan: standard   # always-on; the sync thread lives here (confirm plan in the deploy phase)
+    rootDir: production/backend
+    buildCommand: pip install -r requirements.txt
+    # No --preload: wsgi.py starts the sync thread at import, and a thread started in the gunicorn master
+    # would not survive the fork into the workers.
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --worker-class gthread --threads 4 --timeout 180 --keep-alive 65
+    healthCheckPath: /api/health
+    envVars:
+      - { key: PYTHON_VERSION, value: 3.12.7 }
+      - { key: ALLOWED_EMAIL_DOMAIN, value: openhouse.in }
+      - { key: SYNC_ENABLED, value: "1" }
+      - { key: JWT_SECRET, generateValue: true }
+      - { key: INGEST_TOKEN, generateValue: true }
+      # sync: false (set in dashboard)
+      - { key: DATABASE_URL, sync: false }
+      - { key: GOOGLE_OAUTH_CLIENT_ID, sync: false }
+      - { key: ADMIN_EMAILS, sync: false }
+      - { key: FRONTEND_ORIGIN, sync: false }
+      - { key: BOLNA_API_KEY, sync: false }
+      - { key: S3_ENDPOINT, sync: false }
+      - { key: S3_BUCKET, sync: false }
+      - { key: S3_ACCESS_KEY_ID, sync: false }
+      - { key: S3_SECRET_ACCESS_KEY, sync: false }
+      - { key: DI_AI_CALLS_URL, sync: false }
+      - { key: DI_AI_CALLS_TOKEN, sync: false }
+      - { key: INTERAKT_API_KEY, sync: false }
+      - { key: INTERAKT_FROM, sync: false }
