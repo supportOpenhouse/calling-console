@@ -1435,8 +1435,8 @@ def test_is_full_due():
 
 # ---------------------------------------------------------------- background thread and CLI
 
-REQUIRED = ("BOLNA_API_KEY", "S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY",
-            "DI_AI_CALLS_URL", "DI_AI_CALLS_TOKEN")
+REQUIRED = ("BOLNA_API_KEY", "R2_BLOB_PHONE_CALLS_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
+            "R2_PHONE_CALLS_PUBLIC_URL", "DI_AI_CALLS_URL", "DI_AI_CALLS_TOKEN")
 
 
 def _configure(monkeypatch, **overrides):
@@ -1458,8 +1458,8 @@ def _join_sync_threads():
 
 
 def test_background_thread_needs_integrations(monkeypatch):
-    ran = _configure(monkeypatch, S3_BUCKET="", DI_AI_CALLS_TOKEN="")
-    with pytest.raises(RuntimeError, match="S3_BUCKET, DI_AI_CALLS_TOKEN"):
+    ran = _configure(monkeypatch, R2_BLOB_PHONE_CALLS_BUCKET="", DI_AI_CALLS_TOKEN="")
+    with pytest.raises(RuntimeError, match="R2_BLOB_PHONE_CALLS_BUCKET, DI_AI_CALLS_TOKEN"):
         start_background_sync()
     _join_sync_threads()
     assert ran == [] and sync._started is False

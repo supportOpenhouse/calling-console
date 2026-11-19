@@ -133,7 +133,7 @@ def test_test_call_dnc_409(client, conn, bolna_stub):
 
 def test_integrations_reports_unconfigured(client, conn, monkeypatch):
     from backend import config
-    monkeypatch.setattr(config, "S3_BUCKET", "")
+    monkeypatch.setattr(config, "R2_BLOB_PHONE_CALLS_BUCKET", "")
     monkeypatch.setattr(config, "INGEST_TOKEN", "")
     from backend.services.settings_store import set_setting
     set_setting(conn, "diPushFailures", 3)

@@ -209,7 +209,7 @@ def recording(id):
     finally:
         conn.close()
     if call["recording_key"] and storage.storage_enabled():
-        return jsonify({"url": storage.signed_recording_url(call["recording_key"])})
+        return jsonify({"url": storage.recording_url(call["recording_key"])})
     if call["recording_url"]:
         return jsonify({"url": call["recording_url"]})
     raise not_found("no recording for this call")

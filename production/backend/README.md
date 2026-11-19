@@ -45,7 +45,7 @@ cp backend/.env.example backend/.env      # then fill it in
 | `ALLOWED_EMAIL_DOMAIN` | login domain gate (default `openhouse.in`) |
 | `FRONTEND_ORIGIN` | CORS allow-origin |
 | `BOLNA_API_KEY`, `BOLNA_BASE_URL` | Bolna; unset key reports `configured: false` |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` | recording archive (R2) |
+| `R2_BLOB_PHONE_CALLS_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PHONE_CALLS_PUBLIC_URL`, `R2_KEY_PREFIX` | recording archive: the shared phone-calls bucket (same names as Openhouse_Meetings). Bucket = `https://<account>.r2.cloudflarestorage.com/<bucket>`; recordings go under `<R2_KEY_PREFIX>calling-console/recordings/`; links use the first public base. `R2_KEY_PREFIX` empty in production, `dev/` locally |
 | `INGEST_TOKEN` | bearer token for `POST /api/ingest/datasets/<id>/leads` |
 | `DI_AI_CALLS_URL`, `DI_AI_CALLS_TOKEN` | Direct_Inventory ai-calls ingest (Supply calls are pushed there) |
 | `INTERAKT_API_KEY`, `INTERAKT_FROM` | WhatsApp via Interakt |

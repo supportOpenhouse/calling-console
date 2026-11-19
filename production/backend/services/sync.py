@@ -101,8 +101,8 @@ HALTED_CAMPAIGN_STATUSES = ["PAUSED", "STOPPED"]
 # Lead statuses that become DONE when their campaign completes.
 FINISHED_LEAD_STATUSES = ["NOT_CONNECTED", "BLOCKED", "VOICEMAIL", "FAILED", "CONNECTED"]
 # The background thread refuses to start without these (an unset one would silently skip its step).
-REQUIRED_CONFIG = ("BOLNA_API_KEY", "S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY",
-                   "DI_AI_CALLS_URL", "DI_AI_CALLS_TOKEN")
+REQUIRED_CONFIG = ("BOLNA_API_KEY", "R2_BLOB_PHONE_CALLS_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
+                   "R2_PHONE_CALLS_PUBLIC_URL", "DI_AI_CALLS_URL", "DI_AI_CALLS_TOKEN")
 
 _TERMINAL = sorted(TERMINAL_STATUSES)
 _CALL_COLUMNS = ("agent_id", "campaign_id", "lead_id", "batch_id", "bolna_batch_id", "phone", "from_number",

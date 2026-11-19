@@ -1,30 +1,44 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from .. import config
 from ..services import storage
 
 
-def _cfg(monkeypatch):
-    for k, v in {"S3_ENDPOINT": "https://acct.r2.cloudflarestorage.com", "S3_BUCKET": "recs",
-                 "S3_ACCESS_KEY_ID": "AK", "S3_SECRET_ACCESS_KEY": "SK", "S3_REGION": "auto"}.items():
+def _cfg(monkeypatch, prefix=""):
+    for k, v in {"R2_BLOB_PHONE_CALLS_BUCKET": "https://acct.r2.cloudflarestorage.com/phone-calls",
+                 "R2_ACCESS_KEY_ID": "AK", "R2_SECRET_ACCESS_KEY": "SK",
+                 "R2_PHONE_CALLS_PUBLIC_URL": "https://calls.example.com/, https://pub-x.r2.dev",
+                 "R2_KEY_PREFIX": prefix}.items():
         monkeypatch.setattr(config, k, v)
 
 
-def test_signed_url_without_network(monkeypatch):
+def test_public_link_uses_the_first_base(monkeypatch):
     _cfg(monkeypatch)
     assert storage.storage_enabled() is True
-    url = storage.signed_recording_url("recordings/2026/11/x.mp3")
-    assert "recs" in url and "X-Amz-Signature" in url and "recordings/2026/11/x.mp3" in url
+    assert storage.recording_url("calling-console/recordings/2026/11/x y.mp3") == \
+        "https://calls.example.com/calling-console/recordings/2026/11/x%20y.mp3"
 
 
-def test_storage_disabled_without_bucket(monkeypatch):
-    monkeypatch.setattr(config, "S3_BUCKET", "")
+@pytest.mark.parametrize("var", ["R2_BLOB_PHONE_CALLS_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
+                                 "R2_PHONE_CALLS_PUBLIC_URL"])
+def test_storage_disabled_without_any_setting(monkeypatch, var):
+    _cfg(monkeypatch)
+    monkeypatch.setattr(config, var, "")
     assert storage.storage_enabled() is False
 
 
-def test_archive_recording_key_and_upload(monkeypatch):
+def test_bucket_url_without_a_bucket_fails_loudly(monkeypatch):
     _cfg(monkeypatch)
-    puts = []
+    monkeypatch.setattr(config, "R2_BLOB_PHONE_CALLS_BUCKET", "https://acct.r2.cloudflarestorage.com")
+    with pytest.raises(RuntimeError, match="R2_BLOB_PHONE_CALLS_BUCKET must be"):
+        storage._bucket()
+
+
+def test_archive_recording_key_and_upload(monkeypatch):
+    _cfg(monkeypatch, prefix="dev/")
+    puts, clients = [], []
 
     class Res:
         status_code = 200
@@ -36,13 +50,8 @@ def test_archive_recording_key_and_upload(monkeypatch):
             puts.append(kw)
 
     monkeypatch.setattr(storage.requests, "get", lambda url, timeout=None: Res())
-    monkeypatch.setattr(storage, "_client", lambda: Client())
+    monkeypatch.setattr(storage.boto3, "client", lambda *a, **kw: clients.append(kw) or Client())
     key = storage.archive_recording("ex1", "https://b/rec", datetime(2026, 11, 3, tzinfo=timezone.utc))
-    assert key == "recordings/2026/11/ex1.wav"
-    assert puts[0]["Bucket"] == "recs" and puts[0]["Key"] == key and puts[0]["Body"] == b"RIFF"
-
-
-def test_storage_disabled_without_endpoint(monkeypatch):
-    _cfg(monkeypatch)
-    monkeypatch.setattr(config, "S3_ENDPOINT", "")
-    assert storage.storage_enabled() is False
+    assert key == "dev/calling-console/recordings/2026/11/ex1.wav"
+    assert puts[0]["Bucket"] == "phone-calls" and puts[0]["Key"] == key and puts[0]["Body"] == b"RIFF"
+    assert clients[0]["endpoint_url"] == "https://acct.r2.cloudflarestorage.com"

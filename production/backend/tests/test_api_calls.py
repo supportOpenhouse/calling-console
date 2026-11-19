@@ -94,8 +94,8 @@ def test_recording_returns_signed_or_bolna(client, conn, monkeypatch):
     monkeypatch.setattr(storage, "storage_enabled", lambda: False)
     assert client.get(url, headers=h).get_json() == {"url": "http://bolna/x.mp3"}
     monkeypatch.setattr(storage, "storage_enabled", lambda: True)
-    monkeypatch.setattr(storage, "signed_recording_url", lambda key, expires=3600: f"https://r2/{key}?sig")
-    assert client.get(url, headers=h).get_json() == {"url": "https://r2/recordings/x.mp3?sig"}
+    monkeypatch.setattr(storage, "recording_url", lambda key: f"https://r2/{key}")
+    assert client.get(url, headers=h).get_json() == {"url": "https://r2/recordings/x.mp3"}
 
 
 def test_export_csv_scoped_and_utf8(client, conn):

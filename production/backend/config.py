@@ -35,11 +35,11 @@ BOLNA_API_KEY = os.environ.get("BOLNA_API_KEY", "")
 BOLNA_BASE_URL = os.environ.get("BOLNA_BASE_URL", "https://api.bolna.ai")
 
 # S3-compatible recording storage
-S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "")
-S3_BUCKET = os.environ.get("S3_BUCKET", "")
-S3_ACCESS_KEY_ID = os.environ.get("S3_ACCESS_KEY_ID", "")
-S3_SECRET_ACCESS_KEY = os.environ.get("S3_SECRET_ACCESS_KEY", "")
-S3_REGION = os.environ.get("S3_REGION", "auto")
+R2_BLOB_PHONE_CALLS_BUCKET = os.environ.get("R2_BLOB_PHONE_CALLS_BUCKET", "")  # https://<account>.r2.cloudflarestorage.com/<bucket>
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "")
+R2_PHONE_CALLS_PUBLIC_URL = os.environ.get("R2_PHONE_CALLS_PUBLIC_URL", "")
+R2_KEY_PREFIX = os.environ.get("R2_KEY_PREFIX", "")  # empty in production, dev/ locally
 
 # Direct_Inventory integration
 INGEST_TOKEN = os.environ.get("INGEST_TOKEN", "")

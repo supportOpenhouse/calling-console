@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: calling-console-api
+    name: oh-ai-calling-console
     env: python
     region: singapore
     plan: standard   # always-on; the sync thread lives here (confirm plan in the deploy phase)
@@ -21,10 +21,11 @@ services:
       - { key: GOOGLE_OAUTH_CLIENT_ID, sync: false }
       - { key: FRONTEND_ORIGIN, sync: false }
       - { key: BOLNA_API_KEY, sync: false }
-      - { key: S3_ENDPOINT, sync: false }
-      - { key: S3_BUCKET, sync: false }
-      - { key: S3_ACCESS_KEY_ID, sync: false }
-      - { key: S3_SECRET_ACCESS_KEY, sync: false }
+      - { key: R2_BLOB_PHONE_CALLS_BUCKET, sync: false }
+      - { key: R2_ACCESS_KEY_ID, sync: false }
+      - { key: R2_SECRET_ACCESS_KEY, sync: false }
+      - { key: R2_PHONE_CALLS_PUBLIC_URL, sync: false }
+      - { key: R2_KEY_PREFIX, value: "" }
       - { key: DI_AI_CALLS_URL, sync: false }
       - { key: DI_AI_CALLS_TOKEN, sync: false }
       - { key: INTERAKT_API_KEY, sync: false }
