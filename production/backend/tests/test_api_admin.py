@@ -156,6 +156,33 @@ def test_audit_list(client, conn):
     assert r["total"] == 1 and r["items"][0]["user_email"] == o["email"]
 
 
+def test_audit_filters(client, conn):
+    from datetime import datetime, timezone
+    from backend.services.audit import audit
+    o, h = _hdr(conn, role="ADMIN", vertical="BOTH")
+    m, _ = _hdr(conn, role="MANAGER", vertical="SUPPLY")
+    audit(conn, o["id"], "campaign.pause", "campaign", "camp-123", {"stopped": 1})
+    audit(conn, m["id"], "login", "user", m["id"], {"ip": "10.0.0.1"})
+    audit(conn, None, "sync.run", None, None, {"full": False})
+    with conn.cursor() as cur:  # one entry on an earlier IST day
+        cur.execute("UPDATE audit_log SET created_at = %s WHERE action = 'login'", (datetime(2026, 11, 10, 6, tzinfo=timezone.utc),))
+    conn.commit()
+    get = lambda qs: client.get(f"/api/settings/audit?{qs}", headers=h)  # noqa: E731
+    acts = lambda qs: sorted(i["action"] for i in get(qs).get_json()["items"])  # noqa: E731
+    r = get("").get_json()
+    assert r["total"] == 3 and r["actions"] == ["campaign.pause", "login", "sync.run"]
+    assert r["entities"] == ["campaign", "user"] and r["has_system"] is True
+    assert {u["email"] for u in r["users"]} == {o["email"], m["email"]}
+    assert acts(f"user_id={m['id']}") == ["login"]
+    assert acts("user_id=system") == ["sync.run"]
+    assert acts("action=campaign.pause") == ["campaign.pause"]
+    assert acts("entity=campaign") == ["campaign.pause"]
+    assert acts("q=camp-12") == ["campaign.pause"] and acts("q=10.0.0") == ["login"]
+    assert acts("from=2026-11-10&to=2026-11-10") == ["login"]
+    assert acts("from=2026-11-11") == ["campaign.pause", "sync.run"]
+    assert get("from=bad").status_code == 400
+
+
 def test_head_cannot_overwrite_an_owner_by_email(client, conn):
     _hdr(conn, role="ADMIN", vertical="BOTH", email="boss@openhouse.in")
     head, h = _hdr(conn, role="HEAD", vertical="SUPPLY")
