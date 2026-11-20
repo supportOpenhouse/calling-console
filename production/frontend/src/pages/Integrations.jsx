@@ -7,7 +7,6 @@ import { fmtIST } from '../utils/format.js';
 import { toast } from '../utils/toast.js';
 import { PageHead, PageState, Card, Table } from '../components/ui.jsx';
 
-const PER = 50;
 const flag = (on) => <span className={`badge ${on ? 'badge-green' : ''}`}>{on ? 'configured' : 'not configured'}</span>;
 
 export default function Integrations() {
@@ -19,7 +18,6 @@ export default function Integrations() {
 function IntegrationsPage() {
   const q = useFetch('/api/settings/integrations');
   const [syncing, setSyncing] = useState(false);
-  const [auditTick, setAuditTick] = useState(0);
   const [numbersTick, setNumbersTick] = useState(0);
 
   async function syncNow() {
@@ -29,7 +27,6 @@ function IntegrationsPage() {
       if (r.errors.length) toast(`Sync finished with ${r.errors.length} error(s)`, 'error');
       else toast('Sync finished', 'success');
       q.reload();
-      setAuditTick((t) => t + 1);
       setNumbersTick((t) => t + 1);
     } catch (err) {
       toast(err.message, 'error');
@@ -76,13 +73,12 @@ function IntegrationsPage() {
           ]} rows={failures.map((f) => ({ ...f, id: f.call_id }))} />
           : <div className="muted">None.</div>}
       </Card>
-      <Numbers tick={numbersTick} onChanged={() => setAuditTick((t) => t + 1)} />
-      <Audit tick={auditTick} />
+      <Numbers tick={numbersTick} />
     </>
   );
 }
 
-function Numbers({ tick, onChanged }) {
+function Numbers({ tick }) {
   const q = useFetch('/api/numbers');
   useEffect(() => { if (tick) q.reload(); }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState(false);
@@ -94,7 +90,6 @@ function Numbers({ tick, onChanged }) {
       const r = await api.post('/api/numbers/refresh', undefined, { silent: true });
       toast(`${r.count} numbers synced`, 'success');
       q.reload();
-      onChanged();
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -107,7 +102,6 @@ function Numbers({ tick, onChanged }) {
       toast('Saved', 'success');
       setLabels((p) => { const { [n.id]: _, ...rest } = p; return rest; });
       q.reload();
-      onChanged();
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -127,33 +121,6 @@ function Numbers({ tick, onChanged }) {
     <Card title="Calling numbers" action={<button type="button" className="btn-ghost" disabled={busy} onClick={refresh}>Refresh from Bolna</button>}>
       <PageState loading={q.loading} error={q.error} onRetry={q.reload} />
       {q.data && (q.data.items.length ? <Table cols={cols} rows={q.data.items} /> : <div className="muted">No numbers yet.</div>)}
-    </Card>
-  );
-}
-
-function Audit({ tick }) {
-  const [page, setPage] = useState(1);
-  const q = useFetch(`/api/settings/audit?page=${page}`);
-  useEffect(() => { if (tick) q.reload(); }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
-  const cols = [
-    { key: 'created_at', label: 'When', render: (a) => fmtIST(a.created_at, true) },
-    { key: 'user_email', label: 'User', render: (a) => a.user_email || 'system' },
-    { key: 'action', label: 'Action' },
-    { key: 'meta', label: 'Detail', render: (a) => <span className="muted">{a.meta ? JSON.stringify(a.meta).slice(0, 200) : ''}</span> },
-  ];
-  return (
-    <Card title="Audit trail">
-      <PageState loading={q.loading} error={q.error} onRetry={q.reload} />
-      {q.data && (q.data.items.length ? <Table cols={cols} rows={q.data.items} /> : <div className="muted">Nothing yet.</div>)}
-      {q.data && q.data.total > PER && (
-        <div className="pager">
-          <span>Page {page} of {Math.ceil(q.data.total / PER)}</span>
-          <span>
-            <button type="button" className="btn-ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</button>{' '}
-            <button type="button" className="btn-ghost" disabled={page * PER >= q.data.total} onClick={() => setPage(page + 1)}>Next →</button>
-          </span>
-        </div>
-      )}
     </Card>
   );
 }

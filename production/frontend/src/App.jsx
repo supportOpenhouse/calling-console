@@ -23,6 +23,7 @@ import Handoffs from './pages/Handoffs.jsx';
 import Agents from './pages/Agents.jsx';
 import AgentDetail from './pages/AgentDetail.jsx';
 import Integrations from './pages/Integrations.jsx';
+import Audit from './pages/Audit.jsx';
 
 function RequireAuth({ children }) {
   const { user, loading, meError, retryMe } = useAuth();
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="/agents/:id" element={<AgentDetail />} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Integrations />} />
+          <Route path="/audit" element={<Audit />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
