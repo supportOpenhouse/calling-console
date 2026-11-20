@@ -5,7 +5,7 @@ import { useFetch } from '../api/useFetch.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { canManageDept, fmtDur, fmtHangup, fmtIST, queuedWarning, userDepts } from '../utils/format.js';
 import { toast } from '../utils/toast.js';
-import { PageHead, PageState, Card, OutcomeBadge, TagBadge } from '../components/ui.jsx';
+import { PageHead, PageState, Card, OutcomeBadge, SourceBadge, TagBadge } from '../components/ui.jsx';
 import RecordingPlayer from '../components/RecordingPlayer.jsx';
 
 // Port of parseTranscript in the old console: "assistant: …" / "user: …" lines, continuation lines join the last turn.
@@ -76,7 +76,7 @@ function CallView({ data, dept, manage, reload }) {
   return (
     <>
       <PageHead
-        title={<><code>{c.phone}</code> <OutcomeBadge o={c.outcome} /> <TagBadge tag={c.tag} /></>}
+        title={<><code>{c.phone}</code> <SourceBadge previous={!c.campaign_id} /> <OutcomeBadge o={c.outcome} /> <TagBadge tag={c.tag} /></>}
         sub={<>{lead?.name ? `${lead.name} · ` : ''}{agent?.name}{campaign && <> · <Link to={`/campaigns/${campaign.id}`}>{campaign.name}</Link></>} · {fmtIST(c.started_at, true)} · {fmtDur(c.duration_sec)}</>}
         actions={<Link to={dept ? `/d/${dept}/calls` : '/'} className="btn-ghost">← Calls</Link>} />
       <div className="split-2">

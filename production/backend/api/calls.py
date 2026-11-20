@@ -23,11 +23,14 @@ bp = Blueprint("calls", __name__, url_prefix="/api")
 PAGE_SIZE = 50
 EXPORT_LIMIT = 20000
 _OUTCOMES = ("CONNECTED", "NOT_PICKED", "CARRIER_BLOCKED", "VOICEMAIL", "FAILED", "BALANCE_LOW", "UNKNOWN")
-_BASE_COLS = ["called_at", "campaign", "agent", "phone", "name", "status", "outcome", "hangup_code",
+_BASE_COLS = ["called_at", "source", "campaign", "agent", "phone", "name", "status", "outcome", "hangup_code",
               "duration_sec", "human_turns", "tag"]
 _PLAIN_NUMBER = re.compile(r"^[+-]?[0-9 ().-]+$")  # phones and signed numbers stay as they are
-_FROM = ("FROM call c JOIN campaign k ON k.id = c.campaign_id LEFT JOIN agent a ON a.id = c.agent_id "
+# A department's calls: those of its campaigns ("console"), and calls made outside the console -- no campaign, e.g.
+# Bolna history -- by its agents ("previous"; an agent of BOTH departments shows in both).
+_FROM = ("FROM call c LEFT JOIN campaign k ON k.id = c.campaign_id LEFT JOIN agent a ON a.id = c.agent_id "
          "LEFT JOIN lead l ON l.id = c.lead_id")
+_SOURCE = "CASE WHEN c.campaign_id IS NULL THEN 'previous' ELSE 'console' END AS source"
 
 
 def _ist_day(name: str) -> datetime:
@@ -41,10 +44,11 @@ def _ist_day(name: str) -> datetime:
 def _filters(dept: str) -> tuple[str, list]:
     """WHERE clause (without the keyword) for the department's calls and the request filters."""
     a = request.args
-    where, params = ["k.vertical = %s"], [dept]
+    where = ["(k.vertical = %s OR (c.campaign_id IS NULL AND a.vertical IN (%s, 'BOTH')))"]
+    params = [dept, dept]
     restriction = rbac.use_case_restriction(g.user)
-    if restriction is not None:
-        where.append("k.use_case_id = ANY(%s)")
+    if restriction is not None:  # a call without a use case stays visible (rbac.can_see_use_case)
+        where.append("(c.campaign_id IS NULL OR k.use_case_id = ANY(%s))")
         params.append(restriction)
     for arg, col in (("agent_id", "c.agent_id"), ("campaign_id", "c.campaign_id"), ("tag", "c.tag")):
         if a.get(arg):
@@ -86,7 +90,7 @@ def list_calls(slug):
             cur.execute(
                 "SELECT c.id, c.phone, c.status, c.outcome, c.hangup_code, c.duration_sec, c.human_turns, c.tag, "
                 "c.summary, c.started_at, c.agent_id, c.campaign_id, c.lead_id, c.recording_url IS NOT NULL "
-                "OR c.recording_key IS NOT NULL AS has_recording, k.name AS campaign_name, a.name AS agent_name, "
+                f"OR c.recording_key IS NOT NULL AS has_recording, {_SOURCE}, k.name AS campaign_name, a.name AS agent_name, "
                 f"l.name AS lead_name {_FROM} WHERE {where} "
                 "ORDER BY c.started_at DESC NULLS LAST, c.id LIMIT %s OFFSET %s",
                 [*params, PAGE_SIZE, (page - 1) * PAGE_SIZE])
@@ -114,7 +118,7 @@ def export_calls(slug):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT c.*, k.name AS campaign_name, a.name AS agent_name, l.name AS lead_name "
+                f"SELECT c.*, {_SOURCE}, k.name AS campaign_name, a.name AS agent_name, l.name AS lead_name "
                 f"{_FROM} WHERE {where} ORDER BY c.started_at DESC NULLS LAST, c.id LIMIT %s", [*params, EXPORT_LIMIT])
             rows = cur.fetchall()
     finally:
@@ -126,7 +130,7 @@ def export_calls(slug):
     w.writerow([*_BASE_COLS, *extra, "recording_url", "transcript"])
     for r, f in zip(rows, flats):
         w.writerow([_cell(v) for v in (
-            fmt_ist(r["started_at"], seconds=True), r["campaign_name"], r["agent_name"], r["phone"], r["lead_name"],
+            fmt_ist(r["started_at"], seconds=True), r["source"], r["campaign_name"], r["agent_name"], r["phone"], r["lead_name"],
             r["status"], r["outcome"], r["hangup_code"], r["duration_sec"], r["human_turns"], r["tag"],
             *(f.get(k, "") for k in extra), r["recording_url"], r["transcript"])])
     return Response(out.getvalue().encode("utf-8"), headers={

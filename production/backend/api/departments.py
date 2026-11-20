@@ -86,14 +86,21 @@ def dashboard(slug):
             uc = rbac.load_scoped(conn, "use_case", uc_id, u, "view")
             if uc["department"] != dept:
                 raise not_found()
-        # SQL fragment + params narrowing campaigns (alias ca) to the chosen / permitted use cases
+        # SQL fragment + params narrowing calls to the chosen / permitted use cases. A call without a campaign (made
+        # outside the console, "previous") has no use case: out when one is chosen, visible under a restriction
+        # (rbac.can_see_use_case).
         if uc_id:
             ucf, ucp = " AND ca.use_case_id = %s", [uc_id]
         elif restriction is not None:
-            ucf, ucp = " AND ca.use_case_id = ANY(%s)", [restriction]
+            ucf, ucp = " AND (c.campaign_id IS NULL OR ca.use_case_id = ANY(%s))", [restriction]
         else:
             ucf, ucp = "", []
         since = "now() - make_interval(days => %s)"
+        # The department's calls in range: its campaigns' calls, and previous calls by its agents (calls.py _FROM).
+        calls_from = ("FROM call c LEFT JOIN campaign ca ON ca.id = c.campaign_id LEFT JOIN agent ag ON ag.id = c.agent_id "
+                      f"WHERE c.started_at >= {since} AND (ca.vertical = %s OR (c.campaign_id IS NULL "
+                      "AND ag.vertical IN (%s, 'BOTH')))" + ucf)
+        calls_p = [days, dept, dept] + ucp
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT * FROM use_case WHERE department = %s" + (" AND id = ANY(%s)" if restriction is not None else "")
@@ -107,9 +114,8 @@ def dashboard(slug):
                 "count(*) FILTER (WHERE c.outcome='VOICEMAIL') AS voicemail, "
                 "count(*) FILTER (WHERE c.outcome IN ('FAILED','BALANCE_LOW')) AS failed, "
                 "coalesce(sum(c.duration_sec),0)/60 AS minutes, coalesce(sum(c.cost),0) AS cost, "
-                "count(DISTINCT c.phone) AS unique_phones "
-                f"FROM call c JOIN campaign ca ON ca.id = c.campaign_id "
-                f"WHERE c.started_at >= {since} AND ca.vertical = %s" + ucf, [days, dept] + ucp)
+                "count(DISTINCT c.phone) AS unique_phones, count(*) FILTER (WHERE c.campaign_id IS NULL) AS previous "
+                + calls_from, calls_p)
             stats = cur.fetchone()
 
             funnel = []
@@ -137,19 +143,16 @@ def dashboard(slug):
                                "handoffs": h["n"], "open": h["open"]})
 
             cur.execute(
-                "SELECT coalesce(c.tag,'untagged') AS tag, count(*) AS n FROM call c "
-                "JOIN campaign ca ON ca.id = c.campaign_id "
-                f"WHERE c.started_at >= {since} AND ca.vertical = %s AND c.outcome = 'CONNECTED'" + ucf
-                + " GROUP BY 1 ORDER BY n DESC, tag LIMIT 12", [days, dept] + ucp)
+                "SELECT coalesce(c.tag,'untagged') AS tag, count(*) AS n " + calls_from
+                + " AND c.outcome = 'CONNECTED' GROUP BY 1 ORDER BY n DESC, tag LIMIT 12", calls_p)
             tags = cur.fetchall()
 
-            # agents of this department (or both), counting only calls within the same campaign scope
+            # agents of this department (or both), counting the department's calls in range (previous ones too)
             cur.execute(
                 "SELECT a.id, a.name, count(c.id) AS dialed, count(c.id) FILTER (WHERE c.outcome='CONNECTED') AS connected "
-                "FROM agent a LEFT JOIN (SELECT c.* FROM call c JOIN campaign ca ON ca.id = c.campaign_id "
-                f"WHERE c.started_at >= {since} AND ca.vertical = %s" + ucf + ") c ON c.agent_id = a.id "
+                "FROM agent a LEFT JOIN (SELECT c.* " + calls_from + ") c ON c.agent_id = a.id "
                 "WHERE a.vertical IN (%s, 'BOTH') GROUP BY a.id ORDER BY dialed DESC, a.name",
-                [days, dept] + ucp + [dept])
+                calls_p + [dept])
             agents = cur.fetchall()
 
             rf, rp = (" AND r.use_case_id = ANY(%s)", [restriction]) if restriction is not None else ("", [])

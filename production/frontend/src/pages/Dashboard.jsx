@@ -64,7 +64,7 @@ function DashboardFor({ dept }) {
     <>
       {head}
       <div className="grid-6">
-        <Stat label="Dialed" value={inr(dialed)} hint={`${s.unique_phones} unique numbers`} />
+        <Stat label="Dialed" value={inr(dialed)} hint={`${s.unique_phones} unique numbers${s.previous ? ` · ${inr(s.previous)} previous` : ''}`} />
         <Stat label="Connected" value={inr(connected)} hint={`${pct(connected, dialed)} dial → connect`}
           tone={dialed && connected / dialed >= 0.5 ? 'green' : 'amber'} />
         <Stat label="Good tags" value={good} hint={`${pct(good, connected)} of connected`} tone="green" />

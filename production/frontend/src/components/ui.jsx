@@ -88,6 +88,13 @@ export function OutcomeBadge({ o }) {
 const GOOD = ['qualified', 'want_to_sell', 'hot_buyer', 'booked', 'interested', 'yes'];
 const SOFT = ['qualified_no_price', 'want_to_sell_later', 'sell_later', 'callback_requested', 'yes_unverified'];
 const DNC = ['dnc', 'do_not_call'];
+// Where a call came from: a console campaign, or made outside the console (no campaign -- e.g. Bolna history).
+export function SourceBadge({ previous }) {
+  return previous
+    ? <span className="badge" title="Made outside the console: directly on Bolna, or before the console">Previous</span>
+    : <span className="badge badge-brand" title="Made by a console campaign">Console</span>;
+}
+
 export function TagBadge({ tag }) {
   if (!tag) return <span className="badge badge-faint">untagged</span>;
   const t = tag.toLowerCase();

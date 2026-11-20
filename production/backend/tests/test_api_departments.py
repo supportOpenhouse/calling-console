@@ -63,6 +63,26 @@ def test_dashboard_counts(client, conn):
     assert client.get("/api/departments/supply/dashboard?days=5", headers=auth_headers(user)).status_code == 400
 
 
+def test_dashboard_counts_previous_calls_of_its_agents(client, conn):
+    """Calls made outside the console (no campaign) count for their agent's department, marked as previous."""
+    user = make_user(conn, role="MANAGER", vertical="SUPPLY")
+    a_s, a_d, a_b = make_agent(conn, vertical="SUPPLY"), make_agent(conn, vertical="DEMAND"), make_agent(conn, vertical="BOTH")
+    uc = make_use_case(conn)
+    cs = make_campaign(conn, agent=a_s, vertical="SUPPLY", use_case_id=uc["id"])
+    make_call(conn, phone="+919000000001", outcome="CONNECTED", started_at=_ago(hours=2), campaign=cs, tag="qualified")
+    make_call(conn, phone="+919000000002", outcome="CONNECTED", started_at=_ago(hours=2), agent=a_s, tag="qualified")
+    make_call(conn, phone="+919000000003", outcome="NOT_PICKED", started_at=_ago(hours=2), agent=a_b)
+    make_call(conn, phone="+919000000004", outcome="CONNECTED", started_at=_ago(hours=2), agent=a_d)  # demand's
+    conn.commit()
+    j = client.get("/api/departments/supply/dashboard?days=1", headers=auth_headers(user)).get_json()
+    assert (j["stats"]["dialed"], j["stats"]["connected"], j["stats"]["previous"]) == (3, 2, 2)
+    assert {t["tag"]: t["n"] for t in j["tags"]}["qualified"] == 2
+    assert {a["id"]: a["dialed"] for a in j["agents"]} == {a_s["id"]: 2, a_b["id"]: 1}
+    assert j["funnel"][0]["dialed"] == 1  # the use-case funnel is console calls only
+    k = client.get(f"/api/departments/supply/dashboard?days=1&use_case_id={uc['id']}", headers=auth_headers(user)).get_json()
+    assert (k["stats"]["dialed"], k["stats"]["previous"]) == (1, 0)  # a chosen use case leaves previous calls out
+
+
 def test_dashboard_use_case_restriction(client, conn):
     uc1 = make_use_case(conn, key="one")
     uc2 = make_use_case(conn, key="two")

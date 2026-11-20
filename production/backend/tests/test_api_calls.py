@@ -1,6 +1,6 @@
 import csv
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from psycopg2.extras import Json
 
@@ -34,12 +34,16 @@ def test_calls_list_scoped_to_dept(client, conn):
     _insert(conn, "lead", campaign_id=sc["id"], phone="+919810000009", name="Meena", variables=Json({}))
     c1 = make_call(conn, phone="+919810000001", started_at=T, campaign=sc, lead=lead)
     make_call(conn, phone="+919810000002", started_at=T, campaign=dc)
-    make_call(conn, phone="+919810000003", started_at=T, agent=sa)  # backfilled, no campaign
+    prev = make_call(conn, phone="+919810000003", started_at=T - timedelta(minutes=1), agent=sa)  # backfilled, no campaign
+    make_call(conn, phone="+919810000004", started_at=T, agent=da)  # another department's previous call
     with conn.cursor() as cur:
         cur.execute("UPDATE call SET transcript = %s WHERE id = %s", ("मुझे कल बात करनी है", c1["id"]))
     u, h = _hdr(conn)
     r = client.get("/api/departments/supply/calls", headers=h).get_json()
-    assert r["total"] == 1 and r["items"][0]["id"] == c1["id"]
+    assert r["total"] == 2  # its campaign's call, and its agent's call made outside the console
+    assert [(i["id"], i["source"]) for i in r["items"]] == [(c1["id"], "console"), (prev["id"], "previous")]
+    assert client.get(f"/api/departments/supply/calls?campaign_id={sc['id']}", headers=h).get_json()["total"] == 1
+    assert client.get(f"/api/departments/supply/calls?agent_id={sa['id']}", headers=h).get_json()["total"] == 2
     assert client.get("/api/departments/demand/calls", headers=h).status_code == 403
     assert client.get("/api/departments/supply/calls?q=कल", headers=h).get_json()["total"] == 1
     assert client.get("/api/departments/supply/calls?q=zzz", headers=h).get_json()["total"] == 0
@@ -47,7 +51,7 @@ def test_calls_list_scoped_to_dept(client, conn):
     assert client.get("/api/departments/supply/calls?outcome=UNKNOWN", headers=h).get_json()["total"] == 0
     assert client.get("/api/departments/supply/calls?outcome=BAD", headers=h).status_code == 400
     assert client.get("/api/departments/supply/calls?from=2026-11-11", headers=h).get_json()["total"] == 0
-    assert client.get("/api/departments/supply/calls?from=2026-11-10&to=2026-11-10", headers=h).get_json()["total"] == 1
+    assert client.get("/api/departments/supply/calls?from=2026-11-10&to=2026-11-10", headers=h).get_json()["total"] == 2
 
 
 def test_calls_list_use_case_restriction(client, conn):
@@ -117,7 +121,7 @@ def test_export_csv_scoped_and_utf8(client, conn):
     assert r.headers["Content-Type"].startswith("text/csv") and "charset=utf-8" in r.headers["Content-Type"]
     assert r.headers["Content-Disposition"].startswith('attachment; filename="calls_')
     rows = list(csv.reader(io.StringIO(r.data.decode("utf-8"))))
-    assert rows[0] == ["called_at", "campaign", "agent", "phone", "name", "status", "outcome", "hangup_code",
+    assert rows[0] == ["called_at", "source", "campaign", "agent", "phone", "name", "status", "outcome", "hangup_code",
                        "duration_sec", "human_turns", "tag", "budget", "recording_url", "transcript"]
     assert len(rows) == 3
     row = dict(zip(rows[0], rows[1]))

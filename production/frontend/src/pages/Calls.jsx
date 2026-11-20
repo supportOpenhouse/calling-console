@@ -5,7 +5,7 @@ import { useFetch } from '../api/useFetch.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { toast } from '../utils/toast.js';
 import { OUTCOME_LABEL, fmtDur, fmtHangup, fmtIST, userDepts } from '../utils/format.js';
-import { PageHead, PageState, Card, Empty, OutcomeBadge, TagBadge } from '../components/ui.jsx';
+import { PageHead, PageState, Card, Empty, OutcomeBadge, SourceBadge, TagBadge } from '../components/ui.jsx';
 
 const PER = 50;
 const FILTER_KEYS = ['agent_id', 'campaign_id', 'outcome', 'tag', 'from', 'to', 'q'];
@@ -100,12 +100,13 @@ function CallsFor({ dept }) {
           <div className="table-scroll">
             <table className="data-table">
               <thead>
-                <tr><th>When</th><th>Phone</th><th>Name</th><th>Agent / campaign</th><th>Outcome</th><th>Hangup</th><th className="num">Dur.</th><th>Tag</th><th>Rec.</th></tr>
+                <tr><th>When</th><th>Source</th><th>Phone</th><th>Name</th><th>Agent / campaign</th><th>Outcome</th><th>Hangup</th><th className="num">Dur.</th><th>Tag</th><th>Rec.</th></tr>
               </thead>
               <tbody>
                 {items.map((c) => (
                   <tr key={c.id}>
                     <td style={{ whiteSpace: 'nowrap' }}><Link to={`/calls/${c.id}`}>{fmtIST(c.started_at)}</Link></td>
+                    <td><SourceBadge previous={c.source === 'previous'} /></td>
                     <td><code>{c.phone}</code></td>
                     <td>{c.lead_name || '—'}</td>
                     <td>{c.agent_name ?? '—'}<div className="muted">{c.campaign_name}</div></td>
