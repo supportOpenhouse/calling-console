@@ -12,7 +12,7 @@ wsgi.py             gunicorn entry; starts the background sync thread
 config.py           env-driven config
 db.py               pooled psycopg2 connections
 api/                blueprints: auth, users, agents, departments, use_cases, datasets, workflows, schedule,
-                    campaigns, calls, handoffs, home, settings, sync, ingest
+                    campaigns, calls, handoffs, settings, sync, ingest
 services/           bolna, sync, redial, scheduler, workflows, datasets, classify, di_push, whatsapp, storage, rbac ...
 migrations/         001..NNN SQL, applied in filename order (idempotent)
 scripts/            migrate, seed, backfill, run_sync
@@ -46,7 +46,7 @@ cp backend/.env.example backend/.env      # then fill it in
 | `FRONTEND_ORIGIN` | CORS allow-origin |
 | `BOLNA_API_KEY`, `BOLNA_BASE_URL` | Bolna; unset key reports `configured: false` |
 | `R2_BLOB_PHONE_CALLS_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PHONE_CALLS_PUBLIC_URL`, `R2_KEY_PREFIX` | recording archive: the shared phone-calls bucket (same names as Openhouse_Meetings). Bucket = `https://<account>.r2.cloudflarestorage.com/<bucket>`; recordings go under `<R2_KEY_PREFIX>calling-console/recordings/`; links use the first public base. `R2_KEY_PREFIX` empty in production, `dev/` locally |
-| `INGEST_TOKEN` | bearer token for `POST /api/ingest/datasets/<id>/leads` |
+| `INGEST_TOKEN` | bearer token for the ingest webhooks (see Ingest webhooks below); unset = they answer 503 |
 | `DI_AI_CALLS_URL`, `DI_AI_CALLS_TOKEN` | Direct_Inventory ai-calls ingest (Supply calls are pushed there) |
 | `INTERAKT_API_KEY`, `INTERAKT_FROM` | WhatsApp via Interakt |
 | `SYNC_ENABLED` | `0` disables the background sync thread (default `1`) |
@@ -78,6 +78,38 @@ no cap, then marks DNC (source `backfill`, reason = the tag) every phone with a 
 `run_sync` runs one sync under the same lock as the background thread and "Sync now". `--full` also syncs agents and
 pages past each agent's lookback; `--max-pages 0` lifts the per-agent cap of 40 pages. It exits 1 when the report
 has errors or another sync holds the lock.
+
+## Ingest webhooks
+
+All three take `Authorization: Bearer <INGEST_TOKEN>` and JSON; a wrong or missing token is 401, an unset one 503.
+Each is recorded in the audit trail as `system`.
+
+| Webhook | Does |
+| --- | --- |
+| `POST /api/ingest/use-cases` | create or update a use case, matched by `department` + `key` |
+| `POST /api/ingest/datasets` | create or update a dataset, matched by `department` + `name`, and append `leads` |
+| `POST /api/ingest/datasets/<id>/leads` | append leads to an existing dataset (the Meta landing page) |
+
+Use case (a new one needs `tag_taxonomy` with exactly the lists `good, soft, terminal, dnc, retry`; an update changes
+only the fields sent; the default agent is named by its Bolna agent id, null clears it):
+
+```json
+{"department": "SUPPLY", "key": "meta_sellers", "name": "Meta sellers", "description": "optional",
+ "default_agent_bolna_id": "<bolna agent id>", "priority": 3, "color": "#12315C", "active": true,
+ "tag_taxonomy": {"good": ["qualified"], "soft": ["callback_requested"], "terminal": ["not_selling"],
+                  "dnc": ["do_not_call"], "retry": ["busy"]}}
+```
+→ `200 {"use_case": {...}, "created": true}`; 400 on a bad field, 409 when a renamed key is taken.
+
+Dataset (`leads` optional, same handling as the leads webhook, including "new leads" workflow triggers;
+`use_case_key` and `description` change only when sent, null clears them):
+
+```json
+{"department": "SUPPLY", "name": "Meta form leads - Nov", "use_case_key": "meta_sellers", "description": "optional",
+ "leads": [{"phone": "+919810000000", "name": "Ravi", "city": "Noida", "society": "ATS", "any_other_field": "kept"}]}
+```
+→ `200 {"dataset_id": "...", "created": true, "stats": {"added": 1, "updated": 0, "invalid": 0, "duplicates": 0},
+"fired": [], "errors": []}`; 409 when two datasets of the department already share the name (rename one in the app).
 
 ## Deployment (Render + Neon)
 
