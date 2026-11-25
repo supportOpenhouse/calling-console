@@ -195,3 +195,25 @@ def test_handoffs_list_and_patch(client, conn):
     assert (b["status"], b["assigned_to_id"], b["rm_notes"]) == ("CONTACTED", peer["id"], "called")
     assert client.patch(url, headers=h, json={"assigned_to_id": None}).get_json()["assigned_to_id"] is None
     assert client.patch(f"/api/handoffs/{other['id']}", headers=h, json={"status": "CONTACTED"}).status_code == 403
+
+
+def test_pulse_newest_call_of_the_department_and_stale_pull(client, conn, monkeypatch):
+    from .. import config
+    from ..services.settings_store import set_setting
+    sa, sc, da, dc = _setup(conn)
+    _, h = _hdr(conn)  # Supply manager
+    r = client.get("/api/sync/pulse?dept=supply", headers=h)
+    assert r.status_code == 200 and r.json["latest"] is None
+    c = make_call(conn, phone="+919810000001", started_at=T, campaign=sc)
+    d = make_call(conn, phone="+919810000002", started_at=T, campaign=dc)
+    with conn.cursor() as cur:  # Demand's call is newer but not Supply's
+        cur.execute("UPDATE call SET created_at = now() + interval '1 hour' WHERE id = %s", (d["id"],))
+    conn.commit()
+    latest = _one(conn, "SELECT extract(epoch FROM created_at)::float AS t FROM call WHERE id = %s", c["id"])["t"]
+    assert client.get("/api/sync/pulse?dept=supply", headers=h).json["latest"] == latest
+    assert client.get("/api/sync/pulse?dept=demand", headers=h).status_code == 403
+    monkeypatch.setattr(config, "SYNC_ENABLED", "1")
+    assert client.get("/api/sync/pulse?dept=supply", headers=h).json["stale"] is True  # never pulled
+    set_setting(conn, "lastPullAt", datetime.now(timezone.utc).isoformat())
+    conn.commit()
+    assert client.get("/api/sync/pulse?dept=supply", headers=h).json["stale"] is False

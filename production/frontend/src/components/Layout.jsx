@@ -8,6 +8,7 @@ import {
   IconUsers, IconSettings, IconLeads, IconReport, IconQualified, IconSun, IconMoon, IconMenu, IconLogout, IconChevron,
 } from './icons.jsx';
 import { TitleSlot } from './ui.jsx';
+import LiveNotices from './LiveNotices.jsx';
 
 function initials(name, email) {
   const s = (name || (email || '').split('@')[0] || '').trim();
@@ -118,6 +119,7 @@ export default function Layout() {
         </header>
         <main className="main"><TitleSlot.Provider value={titleSlot}><Outlet /></TitleSlot.Provider></main>
       </div>
+      <LiveNotices dept={dept} />
     </div>
   );
 }

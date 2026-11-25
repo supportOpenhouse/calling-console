@@ -8,7 +8,8 @@ migrations, PyJWT + Google sign-in, gunicorn, a sync thread elected by a Postgre
 
 ```
 app.py              Flask app factory + /api/health
-wsgi.py             gunicorn entry; starts the background sync thread
+wsgi.py             gunicorn entry; checks the sync config
+gunicorn.conf.py    post_fork: starts the background sync thread in each worker
 config.py           env-driven config
 db.py               pooled psycopg2 connections
 api/                blueprints: auth, users, agents, departments, use_cases, datasets, workflows, schedule,
@@ -115,8 +116,10 @@ Dataset (`leads` optional, same handling as the leads webhook, including "new le
 
 - Service: see `render.yaml` (root dir `production/backend`). The sync thread lives in the web service, so the plan
   must be always-on, not a free/sleeping tier.
-- **Never use `--preload`** in the gunicorn command: `wsgi.py` starts the sync thread at import, and a thread started
-  in the master dies at fork. Every worker runs its own thread; the advisory lock lets one sync at a time.
+- The sync thread starts in `gunicorn.conf.py` `post_fork`, in each worker, never at import: Render runs gunicorn with
+  `--preload`, and a thread alive in the master at fork deadlocks the worker. The advisory lock lets one sync run at a
+  time. The thread pulls every agent's last 15 minutes of Bolna executions every 10 s (`run_quick`) and runs the full
+  sync every 5 minutes; the frontend polls `GET /api/sync/pulse?dept=` every 10 s for new calls and a stale pull.
 - Migrations are run by hand, not on deploy: `DATABASE_URL=<neon> $PY -m backend.scripts.migrate`.
 - Owners (ADMIN) come from the database, not the environment: a first Google sign-in becomes VIEWER. Make the first
   owner in Neon (before or after their first sign-in), then owners promote others from the Team page:

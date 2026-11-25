@@ -7,6 +7,9 @@ recordings, di. A step that raises is rolled back and recorded in `report["error
 next step still runs. Inside the steps every agent, batch, execution, campaign and recording is handled on its
 own: a failure is rolled back, recorded as "<step> <id>: <msg>" and the loop continues.
 
+Between those syncs `run_quick` pulls every agent's executions of the last QUICK_LOOKBACK every QUICK_SECONDS, so
+new calls show within seconds; the 5-minute sync stays the full pass (cursors, rollup, stale leads, rules retry).
+
 One sync runs at a time: `run_sync` takes `sync_lock` (advisory xact lock LOCK_KEY in a transaction held open on
 a dedicated connection). The background thread of every gunicorn worker (`start_background_sync`, called from
 wsgi.py), the CLI (scripts/run_sync.py) and "Sync now" (POST /api/sync) all go through it.
@@ -40,6 +43,14 @@ log = logging.getLogger("sync")
 
 LOCK_KEY = 42100001
 SYNC_SECONDS = 300
+# The quick pull between syncs (run_quick): every agent, newest first, back to QUICK_LOOKBACK (the 240 s call cap
+# plus the extraction lag; anything later is caught by the 5-minute sync's 45-minute overlap). Bolna answers a page
+# of 20 in ~0.4 s and one of 50 in 2-8 s, hence the small page.
+QUICK_SECONDS = 10
+QUICK_LOOKBACK = timedelta(minutes=15)
+QUICK_PAGE_SIZE = 20
+QUICK_MAX_PAGES = 5
+LAST_PULL = "lastPullAt"  # when the last quick pull reached Bolna for every agent (ISO UTC)
 FULL_SYNC_HOUR_IST = 3  # the first tick after 03:00 IST each night is a full sync
 PAGE_SIZE = 50
 MAX_PAGES = 40  # per agent and run, normal and full
@@ -903,6 +914,80 @@ def run_sync(*, full: bool = False, max_pages: int | None = None) -> dict | None
         return report
 
 
+def quick_pull(conn, now: datetime) -> tuple[dict, bool]:
+    """Every agent's executions created in the last QUICK_LOOKBACK, newest first (QUICK_PAGE_SIZE a page, up to
+    QUICK_MAX_PAGES), upserted like sync_executions. An execution whose Bolna `updated_at` matches the stored one is
+    skipped. Moves no cursor: only the 5-minute sync may say an agent is fully synced (close_stale_queued relies on
+    it). Returns (report, True when Bolna answered for every agent)."""
+    report = new_report()
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM agent ORDER BY created_at, id")
+        agents = cur.fetchall()
+    conn.commit()
+    since = now - QUICK_LOOKBACK
+    reached = True
+    for agent in agents:
+        report["agents"] += 1
+        try:
+            for page in range(1, QUICK_MAX_PAGES + 1):
+                items, has_more = bolna.list_agent_executions(agent["bolna_agent_id"], page, QUICK_PAGE_SIZE)
+                if not items:
+                    break
+                with conn.cursor() as cur:
+                    cur.execute("SELECT bolna_execution_id, raw->>'updated_at' AS u FROM call "
+                                "WHERE bolna_execution_id = ANY(%s)", ([e["id"] for e in items],))
+                    stored = {r["bolna_execution_id"]: r["u"] for r in cur.fetchall()}
+                conn.commit()
+                past = False
+                for e in items:
+                    report["executions_seen"] += 1
+                    created = _parse_utc(e.get("created_at"))
+                    if created is not None and created < since:
+                        past = True
+                        continue
+                    if e.get("updated_at") and stored.get(e["id"]) == e["updated_at"]:
+                        continue
+                    try:
+                        upsert_execution(conn, e, agent, now, report=report)
+                        report["calls_upserted"] += 1
+                    except Exception as err:
+                        conn.rollback()
+                        _record(report, f"execution {e.get('id')}: {_msg(err)}")
+                if past or not has_more:
+                    break
+        except Exception as err:
+            conn.rollback()
+            reached = False
+            _record(report, f"executions {agent['name']} ({agent['bolna_agent_id']}): {_msg(err)}")
+    return report, reached
+
+
+def run_quick() -> dict | None:
+    """One quick pull under `sync_lock`; None when another sync holds the lock or a pull (any worker's) reached
+    Bolna less than QUICK_SECONDS ago. Stamps LAST_PULL when Bolna answered for every agent."""
+    with sync_lock() as got:
+        if not got:
+            return None
+        conn = get_conn()
+        try:
+            now = _utcnow()
+            last = get_setting(conn, LAST_PULL)
+            if last and now - _parse_utc(last) < timedelta(seconds=QUICK_SECONDS):
+                return None
+            report, reached = quick_pull(conn, now)
+            if reached:
+                set_setting(conn, LAST_PULL, _iso(now))
+                conn.commit()
+            return report
+        finally:
+            conn.close()
+
+
+def is_sync_due(now: datetime, last_report: dict | None) -> bool:
+    """True when no 5-minute sync has started in the last SYNC_SECONDS (any worker's, or "Sync now")."""
+    return last_report is None or now - _parse_utc(last_report["started_at"]) >= timedelta(seconds=SYNC_SECONDS)
+
+
 def is_full_due(now: datetime, last_full_date: str | None) -> bool:
     """True from 03:00 IST until a full sync has run that IST day."""
     ist = now.astimezone(IST)
@@ -911,26 +996,39 @@ def is_full_due(now: datetime, last_full_date: str | None) -> bool:
 
 # ---------------------------------------------------------------- in-process loop (runs inside the web service)
 #
-# Copied from DI's dialer: every gunicorn worker starts this loop from wsgi.py; the advisory lock in run_sync makes
-# exactly one of them sync at a time (the others get None and skip the tick).
+# Copied from DI's dialer: every gunicorn worker starts this loop (gunicorn.conf.py post_fork); the advisory lock
+# makes exactly one of them sync at a time (the others get None and skip), and lastSyncReport / LAST_PULL in the
+# database keep the pace across workers.
+
+def _tick() -> None:
+    """The 5-minute sync when it is due, then a quick pull."""
+    conn = get_conn()
+    try:
+        last_full = get_setting(conn, "lastFullSyncDate")
+        last_report = get_setting(conn, "lastSyncReport")
+    finally:
+        conn.close()
+    now = _utcnow()
+    if is_sync_due(now, last_report):
+        report = run_sync(full=is_full_due(now, last_full))
+        if report is None:
+            log.info("sync: skipped, another worker is syncing")
+        elif report["errors"]:
+            log.warning("sync: finished with %d error(s)", len(report["errors"]))
+    quick = run_quick()
+    if quick and quick["errors"]:
+        log.warning("quick pull: %s", "; ".join(quick["errors"])[:1000])
+
 
 def _loop():
-    log.info("in-process sync loop started (advisory-locked; every %ds)", SYNC_SECONDS)
+    log.info("in-process sync loop started (advisory-locked; quick pull every %ds, sync every %ds)",
+             QUICK_SECONDS, SYNC_SECONDS)
     while True:
         try:
-            conn = get_conn()
-            try:
-                last_full = get_setting(conn, "lastFullSyncDate")
-            finally:
-                conn.close()
-            report = run_sync(full=is_full_due(_utcnow(), last_full))
-            if report is None:
-                log.info("sync: skipped, another worker is syncing")
-            elif report["errors"]:
-                log.warning("sync: finished with %d error(s)", len(report["errors"]))
+            _tick()
         except Exception:  # noqa: BLE001 -- the loop must survive anything
             log.exception("sync: tick failed")
-        sleep(SYNC_SECONDS)
+        sleep(QUICK_SECONDS)
 
 
 _started = False

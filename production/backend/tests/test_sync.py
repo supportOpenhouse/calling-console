@@ -14,7 +14,7 @@ from ..services.ist import IST
 from ..services.settings_store import get_setting, set_setting
 from ..services.sync import (
     LOCK_KEY, close_stale_queued, cursor_key, is_full_due, lead_update_from_call, new_report, norm_batch_status,
-    retry_rules, rollup_campaigns, run_sync, start_background_sync, sync_agents, sync_batches, sync_executions,
+    quick_pull, retry_rules, rollup_campaigns, run_quick, run_sync, start_background_sync, sync_agents, sync_batches, sync_executions,
     upsert_execution,
 )
 from .factories import DEFAULT_REDIAL_POLICY as FACTORY_POLICY
@@ -1622,3 +1622,55 @@ def test_stopped_campaign_agent_is_synced_while_it_has_queued_leads(conn, bolna_
     set_col(conn, "lead", lead, status="NOT_CONNECTED")
     conn.commit()
     assert sync_executions(conn, new_report(), max_pages=6, now=NOW) == set()
+
+
+# ---------------------------------------------------------------- quick pull
+
+def test_quick_pull_upserts_every_agents_recent_changes_and_moves_no_cursor(conn, bolna_stub):
+    live = make_agent(conn, bolna_agent_id="ba-1")
+    make_campaign(conn, agent=live)
+    make_agent(conn, bolna_agent_id="ba-idle")  # no live campaign: pulled too
+    unchanged = ex("ba-1", P(2), at=NOW - timedelta(minutes=3), updated_at="u1")
+    before = ex("ba-1", P(3), at=NOW - timedelta(minutes=4), updated_at="u1", status="in-progress")
+    upsert_execution(conn, unchanged, None, NOW)
+    upsert_execution(conn, before, None, NOW)
+    same = {**unchanged, "status": "failed"}  # Bolna's updated_at did not move: skipped
+    changed = {**before, "updated_at": "u2", "status": "completed"}
+    new = ex("ba-1", P(1), at=NOW - timedelta(minutes=1))
+    old = ex("ba-1", P(4), at=NOW - timedelta(minutes=20))  # before QUICK_LOOKBACK: left to the 5-minute sync
+    idle = ex("ba-idle", P(5), at=NOW - timedelta(minutes=2))
+    bolna_stub.executions = {"ba-1": [[new, same, changed, old], [ex("ba-1", P(6), at=NOW - timedelta(hours=1))]],
+                             "ba-idle": [[idle]]}
+    report, reached = quick_pull(conn, NOW)
+    assert reached and report["errors"] == []
+    assert sorted(a for n, a in bolna_stub.calls if n == "list_agent_executions") == [("ba-1", 1, 20), ("ba-idle", 1, 20)]
+    assert report["calls_upserted"] == 3
+    assert call_row(conn, new) and call_row(conn, idle) and call_row(conn, old) is None
+    assert call_row(conn, changed)["status"] == "completed" and call_row(conn, same)["status"] == "completed"
+    assert get_setting(conn, cursor_key(live["id"])) is None
+
+
+def test_run_quick_stamps_the_pull_only_when_bolna_answers_and_paces_workers(conn, bolna_stub):
+    make_agent(conn, bolna_agent_id="ba-1")
+    conn.commit()
+    bolna_stub.fail_agents = {"ba-1"}
+    assert run_quick()["errors"] and get_setting(conn, sync.LAST_PULL) is None
+    bolna_stub.fail_agents = set()
+    assert run_quick()["errors"] == []
+    stamped = get_setting(conn, sync.LAST_PULL)
+    assert stamped
+    assert run_quick() is None  # a pull reached Bolna less than QUICK_SECONDS ago (this or another worker)
+    assert get_setting(conn, sync.LAST_PULL) == stamped
+
+
+def test_tick_runs_the_sync_only_when_due_then_a_quick_pull(conn, monkeypatch):
+    ran = []
+    monkeypatch.setattr(sync, "run_sync", lambda full: ran.append("sync") or {"errors": []})
+    monkeypatch.setattr(sync, "run_quick", lambda: ran.append("quick"))
+    sync._tick()
+    set_setting(conn, "lastSyncReport", {"started_at": datetime.now(timezone.utc).isoformat()})
+    conn.commit()
+    sync._tick()
+    assert ran == ["sync", "quick", "quick"]
+    assert sync.is_sync_due(NOW, {"started_at": (NOW - timedelta(seconds=300)).isoformat()})
+    assert not sync.is_sync_due(NOW, {"started_at": (NOW - timedelta(seconds=299)).isoformat()})
