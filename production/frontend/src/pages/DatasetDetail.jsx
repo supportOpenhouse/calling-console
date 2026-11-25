@@ -103,9 +103,8 @@ function DatasetDetailFor({ dept, id, manage, admin }) {
   const facets = facetsQ.data;
   const ucName = ds.use_case_id === null ? 'shared' : ucsQ.data?.items.find((u) => u.id === ds.use_case_id)?.name ?? '—';
   const bars = (list, n) => list.slice(0, n).map((s) => ({ label: s.v, n: s.n }));
-  const extraCols = ds.columns
-    .filter((c) => !['phone', 'mobile', 'name', 'city', 'society', 'segment'].some((k) => c.toLowerCase().includes(k)))
-    .slice(0, 4);
+  // every column of the list, except exact copies of the fixed Phone / Name / Society / City / Segment columns
+  const extraCols = ds.columns.filter((c) => !['phone', 'name', 'society', 'city', 'segment'].includes(c.toLowerCase()));
   const usedBy = (wfQ.data?.items ?? []).filter((w) => w.dataset_id === id);
   const rows = rowsQ.data?.items ?? [];
   const total = rowsQ.data?.total ?? 0;
@@ -178,7 +177,7 @@ function DatasetDetailFor({ dept, id, manage, admin }) {
                     <tr key={l.id} className={l.dnc ? 'row-dnc' : ''}>
                       <td><code>{l.phone}</code></td>
                       <td>{l.name || '—'}</td><td>{l.society || '—'}</td><td>{l.city || '—'}</td><td>{l.segment || '—'}</td>
-                      {extraCols.map((c) => <td key={c} className="muted">{l.data[c] ?? ''}</td>)}
+                      {extraCols.map((c) => <td key={c} className="muted cell-clip" title={l.data[c] ?? ''}>{l.data[c] ?? ''}</td>)}
                       <td className="num">{l.total_attempts}</td>
                       <td className="muted">{fmtIST(l.last_called_at)}</td>
                       <td>{l.last_outcome ? <OutcomeBadge o={l.last_outcome} /> : '—'}</td>
