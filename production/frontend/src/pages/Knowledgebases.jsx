@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import { api, upload } from '../api/client.js';
+import { api, download, upload } from '../api/client.js';
 import { useFetch } from '../api/useFetch.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { uploadSizeError } from '../utils/format.js';
@@ -33,6 +33,19 @@ export default function Knowledgebases() {
     return () => clearInterval(t);
   }, [processing, q.reload]);
 
+  // A web page opens directly; a PDF opens our copy (kept when it was uploaded here; Bolna never gives files back).
+  async function open(k) {
+    if (k.source) { window.open(k.source, '_blank', 'noopener'); return; }
+    const w = window.open('', '_blank'); // opened before the await, so popup blockers allow it
+    try {
+      const blob = await download(`/api/knowledgebases/${k.rag_id}/file`);
+      w.location = URL.createObjectURL(blob);
+    } catch (err) {
+      w.close();
+      toast(err.message, 'error');
+    }
+  }
+
   async function remove(k) {
     if (!window.confirm(`Delete ${k.file_name}? Bolna deletes it for good.`)) return;
     try {
@@ -42,7 +55,7 @@ export default function Knowledgebases() {
   }
 
   const cols = [
-    { key: 'file_name', label: 'Name', render: (k) => (k.source ? <a href={k.source} target="_blank" rel="noreferrer">{k.file_name}</a> : k.file_name) },
+    { key: 'file_name', label: 'Name' },
     { key: 'source_type', label: 'Type', render: (k) => (k.source_type || '—').toUpperCase() },
     { key: 'status', label: 'Status', render: (k) => <StatusBadge s={k.status} /> },
     { key: 'chunk_size', label: 'Chunk size', align: 'right', render: (k) => num(k.chunk_size) },
@@ -53,6 +66,7 @@ export default function Knowledgebases() {
     { key: 'humanized_created_at', label: 'Created', render: (k) => <span title={k.created_at}>{k.humanized_created_at || '—'}</span> },
     { key: 'actions', label: '', render: (k) => (
       <span style={{ display: 'flex', gap: 8 }}>
+        <button type="button" className="btn-link" onClick={() => open(k)}>Open</button>
         <button type="button" className="btn-link" onClick={() => setViewing(k.rag_id)}>Details</button>
         {owner && <button type="button" className="btn-link" onClick={() => remove(k)}>Delete</button>}
       </span>

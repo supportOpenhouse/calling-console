@@ -1,5 +1,8 @@
 import io
 
+import pytest
+
+from ..services import storage
 from .conftest import auth_headers
 from .factories import make_user
 
@@ -11,6 +14,17 @@ def _kb(**kw):
     return {"rag_id": KB, "file_name": "NCR_Society_Location_List.pdf", "status": "processed", "source_type": "pdf",
             "chunk_size": 512.0, "similarity_top_k": 15.0, "overlapping": 20.0, "language_support": None,
             "agent_count": 0, "is_used_by_agents": False, **kw}
+
+
+@pytest.fixture
+def r2(monkeypatch):
+    """R2 configured, its knowledge-base copies in a dict."""
+    copies = {}
+    monkeypatch.setattr(storage, "storage_enabled", lambda: True)
+    monkeypatch.setattr(storage, "save_kb_pdf", lambda rag_id, data: copies.__setitem__(rag_id, data))
+    monkeypatch.setattr(storage, "load_kb_pdf", lambda rag_id: copies.get(rag_id))
+    monkeypatch.setattr(storage, "delete_kb_pdf", lambda rag_id: copies.pop(rag_id, None))
+    return copies
 
 
 def _hdr(conn, role):
@@ -34,7 +48,7 @@ def test_anyone_signed_in_lists_and_views(client, conn, bolna_stub):
     assert client.get("/api/knowledgebases").status_code == 401
 
 
-def test_owner_creates_from_a_pdf_or_a_url_with_every_option(client, conn, bolna_stub):
+def test_owner_creates_from_a_pdf_or_a_url_with_every_option(client, conn, bolna_stub, r2):
     h = _hdr(conn, "ADMIN")
     r = client.post("/api/knowledgebases", headers=h, content_type="multipart/form-data", data={
         "file": (io.BytesIO(PDF), "Societies.pdf"), "chunk_size": "256", "similarity_top_k": "5", "overlapping": "0",
@@ -42,6 +56,7 @@ def test_owner_creates_from_a_pdf_or_a_url_with_every_option(client, conn, bolna
     assert r.status_code == 200 and r.json["status"] == "processing"
     assert bolna_stub.calls[-1] == ("create_knowledgebase", (
         {"chunk_size": 256, "similarity_top_k": 5, "overlapping": 0, "language_support": "multilingual"}, ("Societies.pdf", PDF)))
+    assert r2 == {"3c90c3d0d444b5088228dd25736052af": PDF}  # our copy, to open it later
     r = client.post("/api/knowledgebases", headers=h, content_type="multipart/form-data",
                     data={"url": " https://openhouse.in/faq "})
     assert r.status_code == 200 and bolna_stub.calls[-1] == ("create_knowledgebase", ({"url": "https://openhouse.in/faq"}, None))
@@ -83,3 +98,30 @@ def test_delete_refuses_one_an_agent_uses(client, conn, bolna_stub):
     assert bolna_stub.calls[-1] == ("delete_knowledgebase", (KB,))
     assert [(a["entity_id"], a["meta"]["file_name"]) for a in _audits(conn, "knowledgebase.delete")] == \
         [(KB, "NCR_Society_Location_List.pdf")]
+
+
+def test_pdf_upload_needs_r2_before_anything_reaches_bolna(client, conn, bolna_stub, monkeypatch):
+    monkeypatch.setattr(storage, "storage_enabled", lambda: False)
+    r = client.post("/api/knowledgebases", headers=_hdr(conn, "ADMIN"), content_type="multipart/form-data",
+                    data={"file": (io.BytesIO(PDF), "a.pdf")})
+    assert r.status_code == 503 and not [c for c in bolna_stub.calls if c[0] == "create_knowledgebase"]
+
+
+def test_open_serves_our_copy_to_anyone_signed_in(client, conn, bolna_stub, r2):
+    bolna_stub.kbs = {KB: _kb()}
+    h = _hdr(conn, "VIEWER")
+    r = client.get(f"/api/knowledgebases/{KB}/file", headers=h)
+    assert r.status_code == 404 and "uploaded in Bolna directly" in r.json["error"]
+    r2[KB] = PDF
+    r = client.get(f"/api/knowledgebases/{KB}/file", headers=h)
+    assert r.status_code == 200 and r.data == PDF and r.mimetype == "application/pdf"
+    assert r.headers["Content-Disposition"].startswith("inline") and "NCR_Society_Location_List.pdf" in r.headers["Content-Disposition"]
+    bolna_stub.kbs = {KB: _kb(file_name="सूची.pdf")}  # a non-ASCII name still makes a valid header
+    assert client.get(f"/api/knowledgebases/{KB}/file", headers=h).status_code == 200
+
+
+def test_delete_removes_our_copy(client, conn, bolna_stub, r2):
+    bolna_stub.kbs = {KB: _kb()}
+    r2[KB] = PDF
+    assert client.delete(f"/api/knowledgebases/{KB}", headers=_hdr(conn, "ADMIN")).status_code == 200
+    assert r2 == {}

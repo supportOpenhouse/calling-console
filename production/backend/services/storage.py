@@ -61,3 +61,26 @@ def recording_url(key: str) -> str:
     if not base.startswith("https://"):
         raise RuntimeError(f"R2_PHONE_CALLS_PUBLIC_URL must start with https://, got {base!r}")
     return f"{base}/{quote(key)}"
+
+
+def _kb_key(rag_id: str) -> str:
+    return f"{config.R2_KEY_PREFIX}calling-console/knowledgebases/{rag_id}.pdf"
+
+
+def save_kb_pdf(rag_id: str, data: bytes) -> None:
+    """Our copy of a knowledge-base PDF uploaded through the console (Bolna never gives the file back)."""
+    _client().put_object(Bucket=_bucket()[1], Key=_kb_key(rag_id), Body=data, ContentType="application/pdf")
+
+
+def load_kb_pdf(rag_id: str) -> bytes | None:
+    """The copy saved by save_kb_pdf, or None when there is none (a PDF uploaded in Bolna directly)."""
+    try:
+        return _client().get_object(Bucket=_bucket()[1], Key=_kb_key(rag_id))["Body"].read()
+    except botocore.exceptions.ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+            return None
+        raise
+
+
+def delete_kb_pdf(rag_id: str) -> None:
+    _client().delete_object(Bucket=_bucket()[1], Key=_kb_key(rag_id))  # no error when there is no copy

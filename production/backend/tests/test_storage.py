@@ -55,3 +55,32 @@ def test_archive_recording_key_and_upload(monkeypatch):
     assert key == "dev/calling-console/recordings/2026/11/ex1.wav"
     assert puts[0]["Bucket"] == "phone-calls" and puts[0]["Key"] == key and puts[0]["Body"] == b"RIFF"
     assert clients[0]["endpoint_url"] == "https://acct.r2.cloudflarestorage.com"
+
+
+def test_kb_pdf_copies_live_under_the_prefix_and_a_missing_one_is_none(monkeypatch):
+    import botocore.exceptions
+    _cfg(monkeypatch, prefix="dev/")
+    calls = []
+
+    class Body:
+        def read(self):
+            return b"%PDF"
+
+    class Client:
+        def put_object(self, **kw):
+            calls.append(("put", kw["Key"], kw["ContentType"]))
+
+        def get_object(self, **kw):
+            if kw["Key"].endswith("missing.pdf"):
+                raise botocore.exceptions.ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+            return {"Body": Body()}
+
+        def delete_object(self, **kw):
+            calls.append(("delete", kw["Key"]))
+
+    monkeypatch.setattr(storage.boto3, "client", lambda *a, **kw: Client())
+    storage.save_kb_pdf("kb1", b"%PDF")
+    assert storage.load_kb_pdf("kb1") == b"%PDF" and storage.load_kb_pdf("missing") is None
+    storage.delete_kb_pdf("kb1")
+    assert calls == [("put", "dev/calling-console/knowledgebases/kb1.pdf", "application/pdf"),
+                     ("delete", "dev/calling-console/knowledgebases/kb1.pdf")]
