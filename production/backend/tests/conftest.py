@@ -76,6 +76,7 @@ class BolnaStub:
         self.fail_on: set[str] = set()
         self.fail_agents: set[str] = set()
         self.batches: dict[str, dict] = {}
+        self.kbs: dict[str, dict] = {}
         self._n = {"batch": 0, "call": 0}
 
     def _rec(self, name, *args):
@@ -136,13 +137,35 @@ class BolnaStub:
         self._rec("list_phone_numbers")
         return []
 
+    def list_knowledgebases(self):
+        self._rec("list_knowledgebases")
+        return list(self.kbs.values())
+
+    def get_knowledgebase(self, rag_id):
+        from backend.services.bolna import BolnaError
+        self._rec("get_knowledgebase", rag_id)
+        if rag_id not in self.kbs:
+            raise BolnaError(404, "not found")
+        return self.kbs[rag_id]
+
+    def create_knowledgebase(self, fields, pdf=None):
+        self._rec("create_knowledgebase", fields, pdf)
+        return {"rag_id": "3c90c3d0d444b5088228dd25736052af", "file_name": pdf[0] if pdf else fields["url"],
+                "source_type": "pdf" if pdf else "url", "status": "processing",
+                "language_support": fields.get("language_support")}
+
+    def delete_knowledgebase(self, rag_id):
+        self._rec("delete_knowledgebase", rag_id)
+        return {"message": "success", "state": "deleted"}
+
 
 @pytest.fixture
 def bolna_stub(monkeypatch):
     from backend.services import bolna
     stub = BolnaStub()
     for name in ("list_agents", "get_agent", "update_agent", "list_agent_executions", "get_batch",
-                 "create_batch", "schedule_batch", "stop_batch", "place_call", "list_phone_numbers"):
+                 "create_batch", "schedule_batch", "stop_batch", "place_call", "list_phone_numbers",
+                 "list_knowledgebases", "get_knowledgebase", "create_knowledgebase", "delete_knowledgebase"):
         monkeypatch.setattr(bolna, name, getattr(stub, name))
     return stub
 

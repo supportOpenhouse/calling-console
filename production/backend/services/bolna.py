@@ -77,6 +77,28 @@ def agent_template_variables(agent: dict) -> list[str]:
     return list(dict.fromkeys(re.findall(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}", text)))
 
 
+def list_knowledgebases() -> list[dict]:
+    return _req("GET", "/knowledgebase/all")
+
+
+def get_knowledgebase(rag_id: str) -> dict:
+    return _req("GET", f"/knowledgebase/{rag_id}")
+
+
+def create_knowledgebase(fields: dict, pdf: tuple[str, bytes] | None = None) -> dict:
+    """POST /knowledgebase as multipart/form-data: `fields` (url, chunk_size, similarity_top_k, overlapping,
+    language_support -- whichever are set) and/or a PDF as (filename, bytes). Every part goes in `files`, so the body
+    is multipart even without a file."""
+    parts = {k: (None, str(v)) for k, v in fields.items()}
+    if pdf:
+        parts["file"] = (pdf[0], pdf[1], "application/pdf")
+    return _req("POST", "/knowledgebase", files=parts)
+
+
+def delete_knowledgebase(rag_id: str) -> dict:
+    return _req("DELETE", f"/knowledgebase/{rag_id}")
+
+
 def list_agent_executions(agent_id: str, page: int = 1, page_size: int = 50) -> tuple[list[dict], bool]:
     r = _req("GET", f"/v2/agent/{agent_id}/executions?page_number={page}&page_size={page_size}")
     if isinstance(r, list):

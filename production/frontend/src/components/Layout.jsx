@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext.jsx';
 import { homeDept, rememberDept, userDepts } from '../utils/format.js';
 import {
   IconTasks, IconLogs, IconPipeline, IconFollowUp, IconDialer, IconPhone, IconTicketStub,
-  IconUsers, IconSettings, IconLeads, IconReport, IconQualified, IconSun, IconMoon, IconMenu, IconLogout, IconChevron,
+  IconUsers, IconSettings, IconLeads, IconReport, IconQualified, IconBook, IconSun, IconMoon, IconMenu, IconLogout, IconChevron,
 } from './icons.jsx';
 import { TitleSlot } from './ui.jsx';
 import LiveNotices from './LiveNotices.jsx';
@@ -90,6 +90,7 @@ export default function Layout() {
 
           <div className="sidebar-section-label">Global</div>
           {navItem({ to: '/agents', label: 'Agents', Icon: IconLeads })}
+          {navItem({ to: '/knowledge', label: 'Knowledge base', Icon: IconBook })}
           {isOwner && navItem({ to: '/team', label: 'All users', Icon: IconUsers })}
           {isOwner && navItem({ to: '/settings', label: 'Integrations', Icon: IconSettings })}
           {isOwner && navItem({ to: '/audit', label: 'Audit trail', Icon: IconQualified })}

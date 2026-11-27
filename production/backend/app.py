@@ -38,10 +38,10 @@ class _JSONProvider(DefaultJSONProvider):
 
 def _blueprints() -> list:
     """Blueprints to register. Later tasks append to this list."""
-    from .api import (agents, auth, calls, campaigns, datasets, departments, handoffs, ingest, schedule, settings,
-                      sync, use_cases, users, workflows)
+    from .api import (agents, auth, calls, campaigns, datasets, departments, handoffs, ingest, knowledgebases, schedule,
+                      settings, sync, use_cases, users, workflows)
     return [auth.bp, departments.bp, use_cases.bp, datasets.bp, ingest.bp, workflows.bp, schedule.bp, sync.bp, campaigns.bp, calls.bp, handoffs.bp,
-            users.bp, agents.bp, settings.bp]
+            users.bp, agents.bp, knowledgebases.bp, settings.bp]
 
 
 def create_app() -> Flask:

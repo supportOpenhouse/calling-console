@@ -20,6 +20,7 @@ import CampaignDetail from './pages/CampaignDetail.jsx';
 import Calls from './pages/Calls.jsx';
 import CallDetail from './pages/CallDetail.jsx';
 import Handoffs from './pages/Handoffs.jsx';
+import Knowledgebases from './pages/Knowledgebases.jsx';
 import Agents from './pages/Agents.jsx';
 import AgentDetail from './pages/AgentDetail.jsx';
 import Integrations from './pages/Integrations.jsx';
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="/d/:dept/settings" element={<DeptSettings />} />
           <Route path="/agents" element={<Agents />} />
           <Route path="/agents/:id" element={<AgentDetail />} />
+          <Route path="/knowledge" element={<Knowledgebases />} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Integrations />} />
           <Route path="/audit" element={<Audit />} />

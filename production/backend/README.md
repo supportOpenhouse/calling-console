@@ -13,7 +13,7 @@ gunicorn.conf.py    post_fork: starts the background sync thread in each worker
 config.py           env-driven config
 db.py               pooled psycopg2 connections
 api/                blueprints: auth, users, agents, departments, use_cases, datasets, workflows, schedule,
-                    campaigns, calls, handoffs, settings, sync, ingest
+                    campaigns, calls, handoffs, settings, sync, ingest, knowledgebases (Bolna, read-through)
 services/           bolna, sync, redial, scheduler, workflows, datasets, classify, di_push, whatsapp, storage, rbac ...
 migrations/         001..NNN SQL, applied in filename order (idempotent)
 scripts/            migrate, seed, backfill, run_sync
